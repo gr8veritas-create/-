@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role-Based Access Control: Admin lookup (Google cryptographic UID verification)
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == '5NrPitVLJbXrwW8PctJm7fLX3HI3' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint for Feedback entity
+    function isValidFeedback(data) {
+      return data.authorId is string &&
+        data.authorId == request.auth.uid &&
+        data.authorId.size() <= 128 &&
+        data.authorEmail is string &&
+        data.authorEmail.size() <= 256 &&
+        data.authorName is string &&
+        data.authorName.size() <= 100 &&
+        (!('authorPhotoUrl' in data) || (data.authorPhotoUrl is string && data.authorPhotoUrl.size() <= 500)) &&
+        data.title is string &&
+        data.title.size() >= 2 &&
+        data.title.size() <= 100 &&
+        data.content is string &&
+        data.content.size() >= 5 &&
+        data.content.size() <= 2000 &&
+        data.category in ['feature_request', 'bug_report', 'praise', 'question', 'other'] &&
+        data.targetModule in ['scm', 'safety_stock', 'optimal_pricing', 'general'] &&
+        data.status in ['open', 'in_review', 'resolved', 'archived'] &&
+        (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 1000));
+    }
+
+    // Protected Feedbacks Collection: Only author and admins can view
+    match /feedbacks/{feedbackId} {
+      // 1. Single Document Read: Author or Admin
+      allow get: if isSignedIn() && isValidId(feedbackId) && (
+        existing().authorId == request.auth.uid || isAdmin()
+      );
+
+      // 2. Query Enforcement (Pillar 8): Evaluates resource.data
+      allow list: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+
+      // 3. Document Creation (Strict Keys & Zero-Trust)
+      allow create: if isSignedIn() &&
+        isValidId(feedbackId) &&
+        incoming().keys().hasAll([
+          'authorId', 'authorEmail', 'authorName', 'title', 'content',
+          'category', 'targetModule', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'authorId', 'authorEmail', 'authorName', 'authorPhotoUrl', 'title',
+          'content', 'category', 'targetModule', 'status', 'adminNote', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidFeedback(incoming()) &&
+        incoming().status == 'open' &&
+        (!('adminNote' in incoming()) || incoming().adminNote == '') &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      // 4. Action-Based Updates (Author edits content OR Admin reviews & updates status)
+      allow update: if isSignedIn() &&
+        isValidId(feedbackId) &&
+        isValidFeedback(incoming()) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action A: Author updating title/content/category/targetModule
+          (existing().authorId == request.auth.uid &&
+           incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'category', 'targetModule', 'updatedAt']) &&
+           incoming().status == existing().status) ||
+          // Action B: Admin reviewing status and recording admin note
+          (isAdmin() &&
+           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']))
+        );
+
+      // 5. Deletion: Author or Admin
+      allow delete: if isSignedIn() && isValidId(feedbackId) && (
+        existing().authorId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // Admins Collection: Zero-Trust RBAC.
+    // Web writes are 100% disabled to eliminate all brute-force, dictionary, and credential-stuffing attack vectors.
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (
+        request.auth.uid == adminUid || isAdmin()
+      );
+      allow list, write: if false;
+    }
+
+    // Survey Votes Collection: Track aggregate votes for beta features
+    match /surveys/{featureId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if isValidId(featureId) &&
+        featureId in ['safety_stock', 'optimal_pricing'] &&
+        incoming().keys().hasOnly(['keepCount', 'removeCount', 'lastVotedAt']) &&
+        incoming().keepCount is number &&
+        incoming().removeCount is number;
+      allow delete: if isAdmin();
+    }
+  }
+}

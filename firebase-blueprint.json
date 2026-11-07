@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "Feedback": {
+      "title": "Feedback",
+      "description": "User voice, suggestions, and feedback visible strictly to the sender and administrators.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "The UID of the user who submitted the feedback."
+        },
+        "authorEmail": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Email address of the author."
+        },
+        "authorName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Display name of the author."
+        },
+        "authorPhotoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Avatar photo URL of the author."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Brief headline or summary of the feedback."
+        },
+        "content": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000,
+          "description": "Detailed text content of the feedback or inquiry."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["feature_request", "bug_report", "praise", "question", "other"],
+          "description": "Category of the user submission."
+        },
+        "targetModule": {
+          "type": "string",
+          "enum": ["scm", "safety_stock", "optimal_pricing", "general"],
+          "description": "Which platform module or topic the submission relates to."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "in_review", "resolved", "archived"],
+          "description": "Lifecycle state of the submission managed by admin."
+        },
+        "adminNote": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Optional response note or status explanation provided by administrator."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the submission was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the submission was last updated."
+        }
+      },
+      "required": [
+        "authorId",
+        "authorEmail",
+        "authorName",
+        "title",
+        "content",
+        "category",
+        "targetModule",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Designated administrator identity record granting elevated review privileges.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Email address of the administrator."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "superadmin"],
+          "description": "Admin role tier."
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin role was conferred."
+        }
+      },
+      "required": ["email", "role", "addedAt"]
+    }
+  },
+  "firestore": {
+    "/feedbacks/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Private feedback submissions viewable solely by the sender and verified administrators."
+    },
+    "/admins/{adminUid}": {
+      "schema": "Admin",
+      "description": "Protected admin collection for role authorization lookups."
+    }
+  }
+}

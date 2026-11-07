@@ -1,0 +1,8 @@
+{
+  "name": "ImpactSynth - 合成コントロール法 施策効果測定ツール",
+  "description": "合成コントロール法（Synthetic Control Method）を用い、A/Bテストができない店舗・地域施策の真の純増効果をノーコードで測定するWebツール",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
